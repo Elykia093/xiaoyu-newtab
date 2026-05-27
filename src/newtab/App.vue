@@ -6,7 +6,7 @@
  * @LastEditors: 安知鱼
 -->
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed, watch, nextTick } from "vue";
+import { onMounted, ref, computed, watch, nextTick } from "vue";
 import { useSettingsStore } from "@/stores/settings";
 import { useAppsStore } from "@/stores/apps";
 import { useWallpaperStore, getDynamicFallback } from "@/stores/wallpaper";
@@ -30,7 +30,8 @@ const wallpaperStore = useWallpaperStore();
 const notesStore = useNotesStore();
 
 const showAppGrid = ref(false);
-const isSearchFocused = ref(false);
+// 旧逻辑保留：搜索聚焦状态曾用于触发壁纸放大和一言显示
+// const isSearchFocused = ref(false);
 const showNotesDialog = ref(false);
 
 // 标记是否是初始加载
@@ -39,13 +40,16 @@ const isInitialLoad = ref(true);
 // 壁纸加载状态 - 控制入场动画
 const wallpaperReady = ref(false);
 
-// 延迟的模糊状态 - 在视图切换动画期间保持稳定，避免亮度变化
-const shouldBlurDelayed = ref(false);
-let blurTimeout: ReturnType<typeof setTimeout> | null = null;
+// 壁纸缩放状态 - 只在应用网格视图中启用，搜索聚焦不再放大壁纸
+const shouldScaleWallpaper = ref(false);
 
-function handleSearchFocusChange(focused: boolean) {
-  isSearchFocused.value = focused;
-}
+// 旧逻辑保留：搜索聚焦时也会更新背景缩放状态
+// const shouldBlurDelayed = ref(false);
+// let blurTimeout: ReturnType<typeof setTimeout> | null = null;
+//
+// function handleSearchFocusChange(focused: boolean) {
+//   isSearchFocused.value = focused;
+// }
 
 const defaultWallpaper = "/wallpaper/static/1.jpg";
 
@@ -100,28 +104,34 @@ const showWallpaperLoading = computed(() => {
   return (wallpaperStore.loading || !wallpaperReady.value) && !videoError.value;
 });
 
-// 监听视图切换，延迟更新模糊状态
+// 监听应用网格视图切换，更新壁纸缩放状态
 watch(
-  [showAppGrid, isSearchFocused],
-  ([newShowAppGrid, newIsSearchFocused]) => {
-    const shouldBlur = newShowAppGrid || newIsSearchFocused;
-
-    // 清除之前的定时器
-    if (blurTimeout) {
-      clearTimeout(blurTimeout);
-      blurTimeout = null;
-    }
-
-    if (shouldBlur) {
-      // 需要模糊时立即应用（切换到网格视图或搜索聚焦）
-      shouldBlurDelayed.value = true;
-    } else {
-      // 不需要模糊时立即移除，与应用列表消失动画同步
-      shouldBlurDelayed.value = false;
-    }
+  showAppGrid,
+  newShowAppGrid => {
+    shouldScaleWallpaper.value = newShowAppGrid;
   },
   { immediate: true }
 );
+
+// 旧逻辑保留：搜索聚焦和应用网格都会触发壁纸缩放
+// watch(
+//   [showAppGrid, isSearchFocused],
+//   ([newShowAppGrid, newIsSearchFocused]) => {
+//     const shouldBlur = newShowAppGrid || newIsSearchFocused;
+//
+//     if (blurTimeout) {
+//       clearTimeout(blurTimeout);
+//       blurTimeout = null;
+//     }
+//
+//     if (shouldBlur) {
+//       shouldBlurDelayed.value = true;
+//     } else {
+//       shouldBlurDelayed.value = false;
+//     }
+//   },
+//   { immediate: true }
+// );
 
 // 壁纸样式（用于 img/video 标签）
 const wallpaperStyle = computed(() => {
@@ -129,7 +139,7 @@ const wallpaperStyle = computed(() => {
   // 当 overlayBlur 关闭时，即使在应用列表视图中也不应用背景模糊
   const shouldApplyBlur = showAppGrid.value && wallpaperStore.settings.blur && settingsStore.settings.overlayBlur;
   const blurAmount = shouldApplyBlur ? wallpaperStore.settings.blurAmount || 10 : 0;
-  const scale = shouldBlurDelayed.value ? 1.1 : 1;
+  const scale = shouldScaleWallpaper.value ? 1.1 : 1;
   return {
     filter: `blur(${blurAmount}px)`,
     transform: `translate(-50%, -50%) scale(${scale})`,
@@ -172,13 +182,13 @@ function closeNotesDialog() {
   showNotesDialog.value = false;
 }
 
-onUnmounted(() => {
-  // 清理定时器
-  if (blurTimeout) {
-    clearTimeout(blurTimeout);
-    blurTimeout = null;
-  }
-});
+// 旧逻辑保留：清理聚焦联动定时器
+// onUnmounted(() => {
+//   if (blurTimeout) {
+//     clearTimeout(blurTimeout);
+//     blurTimeout = null;
+//   }
+// });
 
 function toggleAppGrid() {
   showAppGrid.value = !showAppGrid.value;
@@ -305,12 +315,14 @@ function handleAppGridClick(e: MouseEvent) {
           <Transition :name="isInitialLoad ? '' : 'view-switch'">
             <div v-if="!showAppGrid" key="search-view" class="view-panel search-panel">
               <div class="search-wrapper">
-                <SearchBox @focus-change="handleSearchFocusChange" />
+                <!-- 旧逻辑保留：<SearchBox @focus-change="handleSearchFocusChange" /> -->
+                <SearchBox />
               </div>
-              <!-- 一言 - 搜索框聚焦时显示 -->
+              <!-- 一言 - 根据设置常驻显示 -->
               <Transition name="poetry-fade">
+                <!-- 旧逻辑保留：<PoetryDisplay v-if="isSearchFocused" ... /> -->
                 <PoetryDisplay
-                  v-if="isSearchFocused"
+                  v-if="settingsStore.settings.showPoetry"
                   class="poetry-bottom"
                   :class="{ 'poetry-no-dock': !settingsStore.settings.showShortcutDock }"
                   data-poetry-area
