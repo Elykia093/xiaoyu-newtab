@@ -4,6 +4,7 @@ import { Icon } from "@iconify/vue";
 import { useI18n } from "vue-i18n";
 import { useSearchStore } from "@/stores/search";
 import { useSettingsStore } from "@/stores/settings";
+import { LOCAL_DEFAULT_WALLPAPER, useWallpaperStore } from "@/stores/wallpaper";
 
 const { t } = useI18n();
 
@@ -13,6 +14,7 @@ const emit = defineEmits<{
 
 const searchStore = useSearchStore();
 const settingsStore = useSettingsStore();
+const wallpaperStore = useWallpaperStore();
 
 const query = ref("");
 const isFocused = ref(false);
@@ -28,6 +30,18 @@ const MAX_HISTORY_ITEMS = 10;
 
 // 当有输入内容时隐藏 placeholder
 const showPlaceholder = computed(() => !query.value && !isFocused.value);
+
+// 未聚焦时显示 Bing 今日壁纸信息；没有真实 Bing 数据时保留原搜索占位符
+const wallpaperPlaceholder = computed(() => {
+  const info = wallpaperStore.bingWallpaper;
+  if (!info?.url || info.url === LOCAL_DEFAULT_WALLPAPER) return null;
+
+  const title = info.title?.trim();
+  const copyright = info.copyright?.trim();
+  if (!title && !copyright) return null;
+
+  return { title, copyright };
+});
 
 // 显示搜索历史下拉框条件：聚焦且有历史记录且启用了搜索历史功能
 const showHistoryDropdown = computed(
@@ -235,6 +249,10 @@ onMounted(() => {
   loadHistory();
   document.addEventListener("click", handleClickOutside);
 
+  if (!wallpaperStore.bingWallpaper) {
+    void wallpaperStore.fetchBingWallpaper();
+  }
+
   // 根据设置自动聚焦搜索框
   // 使用 sessionStorage 确保在整个浏览器会话中只执行一次
   // 如果同时开启了自动显示应用网格，则不自动聚焦（因为搜索框会被隐藏）
@@ -290,7 +308,19 @@ onUnmounted(() => {
       <!-- 默认状态下显示"搜索"占位符 -->
       <Transition name="placeholder-fade">
         <div v-if="showPlaceholder" class="search-placeholder" @click="inputRef?.focus()">
-          {{ t("search.placeholder") }}
+          <!-- 旧逻辑保留：{{ t("search.placeholder") }} -->
+          <template v-if="wallpaperPlaceholder">
+            <span v-if="wallpaperPlaceholder.title" class="search-placeholder-title">
+              {{ wallpaperPlaceholder.title }}
+            </span>
+            <span v-if="wallpaperPlaceholder.title && wallpaperPlaceholder.copyright" class="search-placeholder-sep">
+              ·
+            </span>
+            <span v-if="wallpaperPlaceholder.copyright" class="search-placeholder-copyright">
+              {{ wallpaperPlaceholder.copyright }}
+            </span>
+          </template>
+          <template v-else>{{ t("search.placeholder") }}</template>
         </div>
       </Transition>
 
@@ -456,16 +486,52 @@ onUnmounted(() => {
 /* 默认占位符 "搜索" */
 .search-placeholder {
   position: absolute;
+  /* 旧居中逻辑保留：
   left: 50%;
-  top: 50%;
   transform: translate(-50%, -50%);
+  */
+  left: 20px;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
   z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
   color: var(--search-text-default);
   font-size: 14px;
   pointer-events: none;
   user-select: none;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   transition: color 0.25s ease;
+}
+
+.search-placeholder-title,
+.search-placeholder-copyright {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-placeholder-title {
+  flex: 0 1 auto;
+  max-width: calc(45% - 8px);
+}
+
+.search-placeholder-copyright {
+  flex: 0 1 auto;
+  max-width: calc(55% - 8px);
+}
+
+.search-placeholder-sep {
+  flex: 0 0 auto;
+  opacity: 0.7;
 }
 
 .search-box-hovered .search-placeholder {
@@ -660,11 +726,13 @@ onUnmounted(() => {
 
 .placeholder-fade-enter-from {
   opacity: 0;
-  transform: translate(-50%, -50%) scale(0.9);
+  /* 旧动画保留：transform: translate(-50%, -50%) scale(0.9); */
+  transform: translateY(-50%) scale(0.9);
 }
 
 .placeholder-fade-leave-to {
   opacity: 0;
-  transform: translate(-50%, -50%) scale(1.05);
+  /* 旧动画保留：transform: translate(-50%, -50%) scale(1.05); */
+  transform: translateY(-50%) scale(1.05);
 }
 </style>
