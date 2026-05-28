@@ -31,13 +31,18 @@ const MAX_HISTORY_ITEMS = 10;
 // 当有输入内容时隐藏 placeholder
 const showPlaceholder = computed(() => !query.value && !isFocused.value);
 
+function formatWallpaperCopyright(copyright?: string) {
+  return copyright?.trim().replace(/\s*(?:\([^)]*\)|（[^（）]*）)\s*$/u, "").trim();
+}
+
 // 未聚焦时显示 Bing 今日壁纸信息；没有真实 Bing 数据时保留原搜索占位符
 const wallpaperPlaceholder = computed(() => {
   const info = wallpaperStore.bingWallpaper;
   if (!info?.url || info.url === LOCAL_DEFAULT_WALLPAPER) return null;
 
   const title = info.title?.trim();
-  const copyright = info.copyright?.trim();
+  // 旧逻辑保留：const copyright = info.copyright?.trim();
+  const copyright = formatWallpaperCopyright(info.copyright);
   if (!title && !copyright) return null;
 
   return { title, copyright };
